@@ -166,8 +166,8 @@ export const getCablesInterSites = () =>
     id, cable_reference, nom, type_lien, fournisseur_id,
     port_source_id, port_dest_id,
     fournisseurs(id, nom),
-    port_source:ports!cables_fibre_port_source_id_fkey(id, slot_port, statut, odf_id),
-    port_dest:ports!cables_fibre_port_dest_id_fkey(id, slot_port, statut, odf_id)
+    port_source:ports!cables_fibre_port_source_id_fkey(id, slot_port, statut, odf_id, slot_id),
+    port_dest:ports!cables_fibre_port_dest_id_fkey(id, slot_port, statut, odf_id, slot_id)
   `)
   .eq('type_lien', 'EXTERNE')
   .order('cable_reference')
@@ -227,7 +227,7 @@ export const getServices = () =>
     cables_fibre(id, cable_reference, nom, type_lien),
     clients(id, nom),
     fournisseurs(id, nom),
-    ports(id, slot_port),
+    ports!services_port_id_fkey(id, slot_port),
     service_jonctions(id, ordre, cable_id, port_entree_id, port_sortie_id)
   `).order('created_at', { ascending: false })
 
@@ -267,6 +267,10 @@ export const getHistory = (limit = 100) =>
   supabase.from('history').select('*').order('created_at', { ascending: false }).limit(limit)
 
 // ─── Stats dashboard ─────────────────────────────────────────────────────────
+// Statistiques agrégées par site via vue_stats_par_site (contourne max_rows=1000)
+export const getSiteStats = () =>
+  supabase.from('vue_stats_par_site').select('*').order('site_name')
+
 export const getStats = async () => {
   const [sites, racks, odfs, ports] = await Promise.all([
     supabase.from('sites').select('id', { count: 'exact' }),

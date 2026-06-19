@@ -683,9 +683,9 @@ export default function SearchView({ t, TH }) {
                 key={o.id} 
                 icon="◉" 
                 title={o.name} 
-                subtitle={`${o.odf_type || "EXTERNE"} — ${o.id}`} 
-                badge={o.odf_type || "EXT"} 
-                badgeColor={o.odf_type === "INTERNE" ? "#A78BFA" : "#3B82F6"} 
+                subtitle={`${o.odf_type || "NON CONFIGURÉ"} — ${o.id}`} 
+                badge={o.odf_type || "N/C"} 
+                badgeColor={o.odf_type === "INTERNE" ? "#A78BFA" : o.odf_type === "EXTERNE" ? "#3B82F6" : "#9CA3AF"} 
                 TH={TH} 
                 onClick={() => setSelOdf(o.id)} 
               />

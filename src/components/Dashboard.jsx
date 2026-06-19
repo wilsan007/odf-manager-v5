@@ -1,48 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { getStats, getSites, getPortsFlat } from "../supabase.js";
+import { getStats, getSiteStats } from "../supabase.js";
 import { Spinner, Bdg } from "./common/UI.jsx";
 
 export default function Dashboard({ t, TH }) {
   const [stats, setStats] = useState(null);
-  const [sites, setSites] = useState([]);
-  const [bySite, setBySite] = useState({});
+  const [siteStats, setSiteStats] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
-        const [s, si, pr] = await Promise.all([
-          getStats(), 
-          getSites(), 
-          getPortsFlat()
+        const [s, ss] = await Promise.all([
+          getStats(),
+          getSiteStats()
         ]);
         if (!alive) return;
         setStats(s);
-        setSites(si.data || []);
-        const siteMap = {};
-        (pr.data || []).forEach(p => {
-          const site = p.slots?.odfs?.racks?.sites;
-          const odf = p.slots?.odfs;
-          const siteKey = site?.id;
-          const odfKey = odf?.id || p.odf_id;
-          if (siteKey) {
-            if (!siteMap[siteKey]) {
-              siteMap[siteKey] = {
-                racks: new Set(),
-                odfs: new Set(),
-                ports: 0,
-                actifs: 0
-              };
-            }
-            siteMap[siteKey].racks.add(p.slots?.odfs?.racks?.id);
-            siteMap[siteKey].odfs.add(odfKey);
-            siteMap[siteKey].ports++;
-            if (p.statut === "OCCUPE") siteMap[siteKey].actifs++;
-          }
-        });
-        if (!alive) return;
-        setBySite(siteMap);
+        setSiteStats(ss.data || []);
       } catch (e) {
       } finally {
         if (alive) setLoading(false);
@@ -101,51 +76,48 @@ export default function Dashboard({ t, TH }) {
       </div>
 
       {/* Row 3 — Sites */}
-      {sites.length > 0 && (
+      {siteStats.length > 0 && (
         <div style={{
           display: "grid", 
           gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", 
           gap: "12px", 
           marginBottom: "20px"
         }}>
-          {sites.map(site => {
-            const ss = bySite[site.id] || {};
-            return (
-              <div key={site.id} style={{ ...card, padding: "14px 16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-                  <span style={{ fontSize: "20px" }}>🌐</span>
-                  <div>
-                    <div style={{ 
-                      fontSize: "13px", 
-                      fontWeight: 700, 
-                      color: TH.text1, 
-                      lineHeight: 1.2 
-                    }}>{site.name}</div>
-                    <div style={{ fontSize: "10px", color: TH.text3 }}>{site.description || "Auto-généré"}</div>
-                  </div>
-                </div>
-                <div style={{ 
-                  display: "grid", 
-                  gridTemplateColumns: "1fr 1fr", 
-                  gap: "3px", 
-                  fontSize: "11px", 
-                  color: TH.text2 
-                }}>
-                  <span>🔲 {ss.racks?.size || 0} racks</span>
-                  <span>◉ {ss.odfs?.size || 0} ODFs</span>
-                  <span>🔌 {ss.ports || 0} ports</span>
-                  <span style={{ color: (ss.actifs || 0) > 0 ? TH.green : TH.text3 }}>
-                    ⚡ {ss.actifs || 0} actifs
-                  </span>
+          {siteStats.map(site => (
+            <div key={site.site_id} style={{ ...card, padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                <span style={{ fontSize: "20px" }}>🌐</span>
+                <div>
+                  <div style={{ 
+                    fontSize: "13px", 
+                    fontWeight: 700, 
+                    color: TH.text1, 
+                    lineHeight: 1.2 
+                  }}>{site.site_name}</div>
+                  <div style={{ fontSize: "10px", color: TH.text3 }}>{site.site_description || "Auto-généré"}</div>
                 </div>
               </div>
-            );
-          })}
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "1fr 1fr", 
+                gap: "3px", 
+                fontSize: "11px", 
+                color: TH.text2 
+              }}>
+                <span>🔲 {site.nb_racks || 0} racks</span>
+                <span>◉ {site.nb_odfs || 0} ODFs</span>
+                <span>🔌 {site.nb_ports || 0} ports</span>
+                <span style={{ color: (site.nb_actifs || 0) > 0 ? TH.green : TH.text3 }}>
+                  ⚡ {site.nb_actifs || 0} actifs
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Empty state */}
-      {!stats?.totalPorts && sites.length === 0 && (
+      {!stats?.totalPorts && siteStats.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 24px", color: TH.text3 }}>
           <div style={{ fontSize: "36px", marginBottom: "14px" }}>📡</div>
           <div style={{ fontSize: "14px" }}>{t.noData}</div>

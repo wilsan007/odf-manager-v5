@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabase, getTransitData, getSalleIdsForPorts, createService, addServiceJonctions, addHistory } from "../../supabase.js";
 import { Btn, Sel, Inp, Modal } from "../common/UI.jsx";
 import { RoutePathDisplay } from "./RoutePathDisplay.jsx";
@@ -28,6 +28,8 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
   const [transitData, setTransitData] = useState(null);
   const [transitReco, setTransitReco] = useState([]);
   const [transitLoading, setTransitLoading] = useState(false);
+  const [hopPorts, setHopPorts] = useState([]);
+  const [loadingHopPorts, setLoadingHopPorts] = useState(false);
 
   const { findPath, getCablesBetween } = useRouteGraph(cables);
 
@@ -48,6 +50,8 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
       setTransitData(null);
       setTransitReco([]);
       setTransitLoading(false);
+      setHopPorts([]);
+      setLoadingHopPorts(false);
     }
   }, [open]);
 
@@ -120,8 +124,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
     }
   }, [hops, transitData, step, pathSites, cables]);
 
-  if (!open) return null;
-
   const totalHops = pathSites.length > 1 ? pathSites.length - 1 : 0;
   const siteName = (id) => (sites || []).find(s => s.id === id)?.name || id;
 
@@ -158,6 +160,128 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
     };
     setHops(newHops);
   };
+
+  useEffect(() => {
+    if (!step.startsWith("HOP_")) {
+      setHopPorts([]);
+      return;
+    }
+    const n = parseInt(step.split("_")[1], 10);
+    const fromSite = pathSites[n];
+    const toSite = pathSites[n + 1];
+    if (!fromSite || !toSite) {
+      setHopPorts([]);
+      return;
+    }
+
+    const cablesDispos = getCablesBetween(fromSite, toSite);
+    const slotIds = new Set();
+    cablesDispos.forEach(c => {
+      if (c.portEntreeObj?.slot_id) slotIds.add(c.portEntreeObj.slot_id);
+      if (c.portSortieObj?.slot_id) slotIds.add(c.portSortieObj.slot_id);
+    });
+
+    if (slotIds.size === 0) {
+      setHopPorts([]);
+      return;
+    }
+
+    setLoadingHopPorts(true);
+    supabase.from("ports")
+      .select("id, slot_id, slot_port, statut")
+      .in("slot_id", Array.from(slotIds))
+      .then(r => {
+        setHopPorts(r.data || []);
+        setLoadingHopPorts(false);
+      })
+      .catch(err => {
+        console.error("Error fetching hop ports:", err);
+        setLoadingHopPorts(false);
+      });
+  }, [step, pathSites, cables]);
+
+  // Compute active hop index from step
+  const activeHopIdx = useMemo(() => {
+    if (!step.startsWith("HOP_")) return null;
+    return parseInt(step.split("_")[1], 10);
+  }, [step]);
+
+  // Compute cablesDispos for active hop
+  const activeCablesDispos = useMemo(() => {
+    if (activeHopIdx === null) return [];
+    const fromSite = pathSites[activeHopIdx];
+    const toSite = pathSites[activeHopIdx + 1];
+    if (!fromSite || !toSite) return [];
+    return getCablesBetween(fromSite, toSite);
+  }, [activeHopIdx, pathSites, getCablesBetween]);
+
+  // Compute availablePortOptions for active hop
+  const availablePortOptions = useMemo(() => {
+    if (activeHopIdx === null || activeCablesDispos.length === 0) return [];
+    
+    const getPortNumber = (portStr) => {
+      if (!portStr) return 0;
+      const m = portStr.match(/P(\d+)$/);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+
+    const portMap = {};
+    (hopPorts || []).forEach(p => {
+      portMap[p.id] = p;
+    });
+
+    const list = [];
+    activeCablesDispos.forEach(c => {
+      const srcSlotId = c.portEntreeObj?.slot_id;
+      const dstSlotId = c.portSortieObj?.slot_id;
+      if (!srcSlotId || !dstSlotId) return;
+
+      for (let pNum = 1; pNum <= 12; pNum++) {
+        const pStr = String(pNum).padStart(2, '0');
+        const pIdSrc = `${srcSlotId}P${pStr}`;
+        const pIdDst = `${dstSlotId}P${pStr}`;
+
+        const portSrc = portMap[pIdSrc];
+        const portDst = portMap[pIdDst];
+
+        if (portSrc && portDst && portSrc.statut === "LIBRE" && portDst.statut === "LIBRE") {
+          list.push({
+            cable: c,
+            portEntree: pIdSrc,
+            portSortie: pIdDst,
+            cable_reference: c.cable_reference,
+          });
+        }
+      }
+    });
+
+    list.sort((a, b) => {
+      const portNumA = getPortNumber(a.portEntree);
+      const portNumB = getPortNumber(b.portEntree);
+      if (portNumA !== portNumB) return portNumA - portNumB;
+      return a.cable_reference.localeCompare(b.cable_reference);
+    });
+
+    return list;
+  }, [activeHopIdx, activeCablesDispos, hopPorts]);
+
+  // Auto-select first available port if none is selected
+  useEffect(() => {
+    if (open && activeHopIdx !== null && availablePortOptions.length > 0 && !loadingHopPorts) {
+      const currentPort = hops[activeHopIdx]?.portEntree;
+      if (!currentPort) {
+        const firstOpt = availablePortOptions[0];
+        const modifiedCable = {
+          ...firstOpt.cable,
+          portEntree: firstOpt.portEntree,
+          portSortie: firstOpt.portSortie,
+        };
+        onSelectCable(activeHopIdx, modifiedCable);
+      }
+    }
+  }, [open, activeHopIdx, availablePortOptions, loadingHopPorts, hops]);
+
+  if (!open) return null;
 
   const onNextHop = (hopIdx) => {
     setErr("");
@@ -230,7 +354,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
 
   const onConfirm = async () => {
     setSaving(true); setErr("");
-    let serviceId = null;
 
     try {
       for (let i = 1; i < hops.length; i++) {
@@ -265,18 +388,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
       const cid = genCid();
       const primaryHop = hops[0];
 
-      const { data: svcData, error: svcErr } = await createService({
-        id: cid,
-        cid: cid,
-        label: label.trim(),
-        cable_id: primaryHop.cableId,
-        client_id: clientId,
-        fournisseur_id: fournisseurId,
-        port_id: primaryHop.portEntree,
-      });
-      if (svcErr) throw svcErr;
-      serviceId = svcData.id;
-
       const jonctions = [];
       let ordre = 1;
 
@@ -293,7 +404,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
             const type1 = linkType(portTransitIn, portTransitMid);
             const jar1Id = await getOrCreateTransitJar(siteTransit, portTransitIn, portTransitMid, type1);
             jonctions.push({
-              service_id: serviceId,
               ordre: ordre++,
               cable_id: jar1Id,
               port_entree_id: portTransitIn,
@@ -303,7 +413,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
             const type2 = linkType(portTransitMid, hop.portEntree);
             const jar2Id = await getOrCreateTransitJar(siteTransit, portTransitMid, hop.portEntree, type2);
             jonctions.push({
-              service_id: serviceId,
               ordre: ordre++,
               cable_id: jar2Id,
               port_entree_id: portTransitMid,
@@ -314,7 +423,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
               const typeF = linkType(portTransitIn, hop.portEntree);
               const jarId = await getOrCreateTransitJar(siteTransit, portTransitIn, hop.portEntree, typeF);
               jonctions.push({
-                service_id: serviceId,
                 ordre: ordre++,
                 cable_id: jarId,
                 port_entree_id: portTransitIn,
@@ -325,7 +433,6 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
         }
 
         jonctions.push({
-          service_id: serviceId,
           ordre: ordre++,
           cable_id: hop.cableId,
           port_entree_id: hop.portEntree,
@@ -333,38 +440,28 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
         });
       }
 
-      if (jonctions.length > 0) {
-        const { error: jonErr } = await addServiceJonctions(jonctions);
-        if (jonErr) throw jonErr;
-      }
+      // Appel de l'insertion et propagation atomique en base de données via RPC
+      const { data: rpcData, error: rpcErr } = await supabase.rpc(
+        "create_service_with_jonctions_atomic",
+        {
+          p_service_id: cid,
+          p_cid: cid,
+          p_label: label.trim(),
+          p_cable_id: primaryHop.cableId,
+          p_client_id: clientId || null,
+          p_fournisseur_id: fournisseurId || null,
+          p_port_id: primaryHop.portEntree,
+          p_jonctions: jonctions,
+          p_history_action: `Service créé via wizard : ${cid} — ${label.trim()} (${siteA}→${siteB})`
+        }
+      );
 
-      const portsToUpdate = [];
-      jonctions.forEach(j => {
-        if (j.port_entree_id) portsToUpdate.push(j.port_entree_id);
-        if (j.port_sortie_id) portsToUpdate.push(j.port_sortie_id);
-      });
-      if (portsToUpdate.length > 0) {
-        await supabase.from("ports").update({
-          statut: "OCCUPE",
-          cid: cid
-        }).in("id", portsToUpdate);
-      }
-
-      try {
-        await addHistory({
-          action: `Service créé via wizard : ${cid} — ${label.trim()} (${siteA}→${siteB})`,
-          entity_type: "service",
-          entity_id: serviceId,
-        });
-      } catch (_) {}
+      if (rpcErr) throw rpcErr;
 
       setSaving(false);
       onDone();
 
     } catch (e) {
-      if (serviceId) {
-        try { await supabase.from('services').delete().eq('id', serviceId); } catch (_) {}
-      }
       setErr(e.message || "Erreur lors de la création du service. Veuillez réessayer.");
       setSaving(false);
     }
@@ -461,52 +558,23 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
 
       const cablesDispos = getCablesBetween(fromSite, toSite);
 
-      const getPortNumber = (portStr) => {
-        if (!portStr) return 0;
-        const m = portStr.match(/P(\d+)$/);
-        return m ? parseInt(m[1], 10) : 0;
-      };
-
       const handleSelectPortEntree = (portVal) => {
-        const selectedCable = cablesDispos.find(c => c.portEntree === portVal);
-        if (!selectedCable) return;
+        const opt = availablePortOptions.find(o => o.portEntree === portVal);
+        if (!opt) return;
 
-        if (selectedCable.portSortieObj?.statut === "OCCUPE") {
-          const selNum = getPortNumber(selectedCable.portEntree);
-          const freeCables = cablesDispos.filter(c => c.portSortieObj?.statut !== "OCCUPE");
-          if (freeCables.length === 0) {
-            setErr(`Erreur : Tous les ports de destination sur ${siteName(toSite)} sont occupés.`);
-            return;
-          }
-          freeCables.sort((a, b) => {
-            const distA = Math.abs(getPortNumber(a.portEntree) - selNum);
-            const distB = Math.abs(getPortNumber(b.portEntree) - selNum);
-            if (distA !== distB) return distA - distB;
-            return getPortNumber(a.portEntree) - getPortNumber(b.portEntree);
-          });
-          const fallbackCable = freeCables[0];
-          setErr(`⚠️ Le port d'arrivée correspondant (${fallbackCable.portSortie.replace('_', '-')}) est occupé. Sélection automatique du port disponible le plus proche : ${fallbackCable.portEntree.replace('_', '-')}.`);
-          onSelectCable(n, fallbackCable);
-        } else {
-          setErr("");
-          onSelectCable(n, selectedCable);
-        }
+        setErr("");
+        const modifiedCable = {
+          ...opt.cable,
+          portEntree: opt.portEntree,
+          portSortie: opt.portSortie,
+        };
+        onSelectCable(n, modifiedCable);
       };
 
       const formatPortDisplay = (pid) => {
         if (!pid) return "";
         return pid.replace('_', '-');
       };
-
-      const uniqEntreePorts = [];
-      const seenEntree = new Set();
-      cablesDispos.forEach(c => {
-        if (!seenEntree.has(c.portEntree)) {
-          seenEntree.add(c.portEntree);
-          uniqEntreePorts.push(c);
-        }
-      });
-      uniqEntreePorts.sort((a, b) => getPortNumber(a.portEntree) - getPortNumber(b.portEntree));
 
       const selectedHop = hops[n] || {};
       const portTransitIn = n > 0 ? (hops[n - 1]?.portSortie || null) : null;
@@ -546,13 +614,20 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
                   1. Port de départ (côté {siteName(fromSite)}) *
                 </label>
                 <Sel value={selectedHop.portEntree || ""} onChange={handleSelectPortEntree} TH={TH}>
-                  <option value="">— Sélectionner le port de départ —</option>
-                  {uniqEntreePorts.map(c => (
-                    <option key={c.portEntree} value={c.portEntree}>
-                      {formatPortDisplay(c.portEntree)}
+                  <option value="">
+                    {loadingHopPorts ? "Chargement des ports disponibles…" : "— Sélectionner le port de départ —"}
+                  </option>
+                  {availablePortOptions.map(opt => (
+                    <option key={opt.portEntree} value={opt.portEntree}>
+                      {formatPortDisplay(opt.portEntree)} (via {opt.cable_reference})
                     </option>
                   ))}
                 </Sel>
+                {availablePortOptions.length === 0 && !loadingHopPorts && (
+                  <div style={{ background: "rgba(248,113,113,.12)", border: "1px solid rgba(248,113,113,.3)", borderRadius: "8px", padding: "10px 14px", color: "#F87171", fontSize: "12px", marginTop: "10px" }}>
+                    Erreur : Tous les ports de destination sur {siteName(toSite)} sont occupés.
+                  </div>
+                )}
               </div>
 
               {selectedHop.portSortie && (
@@ -742,16 +817,23 @@ export function ServiceWizard({ open, onClose, onDone, sites, cables, fournisseu
                   2. Port de sortie (côté {siteName(fromSite)}) vers {siteName(toSite)} *
                 </label>
                 <div style={{ fontSize: "10px", color: TH.text3, marginBottom: "6px" }}>
-                  Choisissez d'abord le câble de sortie — cela permettra de recommander automatiquement le bon port iODF.
+                  Choisissez le port de sortie disponible — cela permettra de recommander automatiquement le bon port iODF.
                 </div>
                 <Sel value={selectedHop.portEntree || ""} onChange={handleSelectPortEntree} TH={TH}>
-                  <option value="">— Sélectionner le port de sortie vers {siteName(toSite)} —</option>
-                  {uniqEntreePorts.map(c => (
-                    <option key={c.portEntree} value={c.portEntree}>
-                      {formatPortDisplay(c.portEntree)}
+                  <option value="">
+                    {loadingHopPorts ? "Chargement des ports disponibles…" : `— Sélectionner le port de sortie vers ${siteName(toSite)} —`}
+                  </option>
+                  {availablePortOptions.map(opt => (
+                    <option key={opt.portEntree} value={opt.portEntree}>
+                      {formatPortDisplay(opt.portEntree)} (via {opt.cable_reference})
                     </option>
                   ))}
                 </Sel>
+                {availablePortOptions.length === 0 && !loadingHopPorts && (
+                  <div style={{ background: "rgba(248,113,113,.12)", border: "1px solid rgba(248,113,113,.3)", borderRadius: "8px", padding: "10px 14px", color: "#F87171", fontSize: "12px", marginTop: "10px" }}>
+                    Erreur : Tous les ports de destination sur {siteName(toSite)} sont occupés.
+                  </div>
+                )}
                 {selectedHop.portSortie && (
                   <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ fontSize: "10px", color: TH.text3 }}>Arrivée côté {siteName(toSite)} :</span>

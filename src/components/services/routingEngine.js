@@ -1,3 +1,5 @@
+import { useMemo, useCallback } from "react";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ROUTING ENGINE — logique BFS, scoring de ports internes, helpers purs
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,39 +149,42 @@ export function findBestInternalPort({
  * @returns {{ graph, findPath, getCablesBetween }}
  */
 export function useRouteGraph(cables) {
-  const graph = {};
-  const cablesExterne = (cables || []).filter(c => c.type_lien === 'EXTERNE');
+  const graph = useMemo(() => {
+    const g = {};
+    const cablesExterne = (cables || []).filter(c => c.type_lien === 'EXTERNE');
 
-  for (const c of cablesExterne) {
-    const s1 = siteFromPortId(c.port_source_id);
-    const s2 = siteFromPortId(c.port_dest_id);
-    if (!s1 || !s2 || s1 === s2) continue;
+    for (const c of cablesExterne) {
+      const s1 = siteFromPortId(c.port_source_id);
+      const s2 = siteFromPortId(c.port_dest_id);
+      if (!s1 || !s2 || s1 === s2) continue;
 
-    const entry = {
-      id: c.id,
-      cable_reference: c.cable_reference,
-      nom: c.nom,
-      portSourceId: c.port_source_id,
-      portDestId: c.port_dest_id,
-      siteSource: s1,
-      siteDest: s2,
-      fournisseur_id: c.fournisseur_id,
-      fournisseurs: c.fournisseurs,
-      port_source: c.port_source,
-      port_dest: c.port_dest,
-    };
+      const entry = {
+        id: c.id,
+        cable_reference: c.cable_reference,
+        nom: c.nom,
+        portSourceId: c.port_source_id,
+        portDestId: c.port_dest_id,
+        siteSource: s1,
+        siteDest: s2,
+        fournisseur_id: c.fournisseur_id,
+        fournisseurs: c.fournisseurs,
+        port_source: c.port_source,
+        port_dest: c.port_dest,
+      };
 
-    if (!graph[s1]) graph[s1] = {};
-    if (!graph[s1][s2]) graph[s1][s2] = [];
-    graph[s1][s2].push(entry);
+      if (!g[s1]) g[s1] = {};
+      if (!g[s1][s2]) g[s1][s2] = [];
+      g[s1][s2].push(entry);
 
-    if (!graph[s2]) graph[s2] = {};
-    if (!graph[s2][s1]) graph[s2][s1] = [];
-    graph[s2][s1].push(entry);
-  }
+      if (!g[s2]) g[s2] = {};
+      if (!g[s2][s1]) g[s2][s1] = [];
+      g[s2][s1].push(entry);
+    }
+    return g;
+  }, [cables]);
 
   /** Recherche BFS du chemin le plus court entre deux sites. */
-  const findPath = (siteA, siteB) => {
+  const findPath = useCallback((siteA, siteB) => {
     if (!siteA || !siteB) return null;
     if (siteA === siteB) return [siteA];
 
@@ -202,10 +207,10 @@ export function useRouteGraph(cables) {
       }
     }
     return null;
-  };
+  }, [graph]);
 
   /** Retourne les câbles disponibles entre deux sites, avec sens normalisé. */
-  const getCablesBetween = (siteFrom, siteTo) => {
+  const getCablesBetween = useCallback((siteFrom, siteTo) => {
     const list = (graph[siteFrom] && graph[siteFrom][siteTo])
       ? graph[siteFrom][siteTo]
       : [];
@@ -216,7 +221,7 @@ export function useRouteGraph(cables) {
       portEntreeObj: c.siteSource === siteFrom ? c.port_source  : c.port_dest,
       portSortieObj: c.siteSource === siteFrom ? c.port_dest    : c.port_source,
     }));
-  };
+  }, [graph]);
 
   return { graph, findPath, getCablesBetween };
 }

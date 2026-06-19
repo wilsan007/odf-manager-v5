@@ -81,6 +81,89 @@ function OdfSlotsPreview({ odfId, color, TH }) {
   );
 }
 
+/* ─── Sélecteur de Slots multiples avec cases à cocher ─── */
+function MultiSlotSelect({ slots, selected, onChange, TH, disabled }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggleSlot = (id) => {
+    if (selected.includes(id)) {
+      onChange(selected.filter(item => item !== id));
+    } else {
+      onChange([...selected, id]);
+    }
+  };
+
+  if (disabled) {
+    return (
+      <div style={{
+        width: "100%", background: TH.bgInput, border: `1px solid ${TH.border}`,
+        borderRadius: "8px", padding: "9px 12px", color: TH.text3,
+        fontSize: "13px", cursor: "not-allowed", opacity: 0.6, boxSizing: "border-box"
+      }}>
+        — Sélectionner un ODF d'abord —
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: "100%", background: TH.bgInput, border: `1px solid ${TH.border2}`,
+          borderRadius: "8px", padding: "9px 12px", color: TH.text1,
+          fontSize: "13px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+          alignItems: "center", boxSizing: "border-box"
+        }}
+      >
+        <span>
+          {selected.length === 0 
+            ? "— Choisir un ou plusieurs slots —" 
+            : `${selected.length} slot(s) sélectionné(s) (${selected.map(id => id.split("_").pop()).join(", ")})`}
+        </span>
+        <span style={{ fontSize: "10px", color: TH.text3 }}>{isOpen ? "▲" : "▼"}</span>
+      </div>
+      {isOpen && (
+        <>
+          <div onClick={() => setIsOpen(false)} style={{ position: "fixed", top: 0, bottom: 0, left: 0, right: 0, zIndex: 99 }} />
+          <div style={{
+            position: "absolute", top: "100%", left: 0, right: 0, 
+            background: TH.bgSurface, border: `1px solid ${TH.border}`, 
+            borderRadius: "8px", marginTop: "4px", zIndex: 100, 
+            maxHeight: "200px", overflowY: "auto", boxShadow: TH.cardShadow,
+            padding: "6px"
+          }}>
+            {slots.length === 0 ? (
+              <div style={{ padding: "8px 12px", color: TH.text3, fontSize: "12px" }}>Aucun slot libre</div>
+            ) : (
+              slots.map(s => {
+                const isChecked = selected.includes(s.id);
+                return (
+                  <label key={s.id} style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "6px 10px", borderRadius: "6px", cursor: "pointer",
+                    background: isChecked ? "rgba(255,255,255,0.03)" : "transparent",
+                    color: TH.text1, fontSize: "12px", userSelect: "none",
+                    transition: "background 0.1s"
+                  }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isChecked}
+                      onChange={() => toggleSlot(s.id)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <span>{s.name}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ─── Sélecteur en cascade Site→Salle→Rack→ODF(→Slot) ─── */
 function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", excludeSalleId = "", forcedSiteId = "", connType = "slot", typeLien = "EXTERNE" }) {
   const [sites, setSites] = useState([]);
@@ -93,7 +176,7 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
   const [salle, setSalle] = useState("");
   const [rack, setRack] = useState("");
   const [odf, setOdf] = useState("");
-  const [slot, setSlot] = useState("");
+  const [selectedSlots, setSelectedSlots] = useState([]);
 
   // Chargement initial des sites
   useEffect(() => { getSites().then(r => setSites(r.data || [])); }, []);
@@ -107,31 +190,32 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
 
   // CASCADE site → salles
   useEffect(() => {
-    setSalle(""); setRack(""); setOdf(""); setSlot("");
+    setSalle(""); setRack(""); setOdf(""); setSelectedSlots([]);
     setSalles([]); setRacks([]); setOdfs([]); setSlots([]);
     if (site) getSalles(site).then(r => setSalles(r.data || []));
   }, [site]);
 
   // CASCADE salle → racks
   useEffect(() => {
-    setRack(""); setOdf(""); setSlot("");
+    setRack(""); setOdf(""); setSelectedSlots([]);
     setRacks([]); setOdfs([]); setSlots([]);
     if (site) getRacks(site, salle || null).then(r => setRacks(r.data || []));
   }, [salle, site]);
 
   // CASCADE rack → ODFs (avec filtrage des ODF complets ou partiellement complets)
   useEffect(() => {
-    setOdf(""); setSlot("");
+    setOdf(""); setSelectedSlots([]);
     setOdfs([]); setSlots([]);
     if (rack) {
       getOdfs(rack).then(async (r) => {
         const odfList = r.data || [];
         if (odfList.length === 0) return;
 
-        // Récupérer les slots et câbles existants
-        const [slotsRes, cablesRes] = await Promise.all([
+        // Récupérer les slots, câbles existants et statut des ports
+        const [slotsRes, cablesRes, portsRes] = await Promise.all([
           supabase.from("slots").select("id, odf_id").in("odf_id", odfList.map(o => o.id)),
-          supabase.from("cables_fibre").select("port_source_id, port_dest_id, type_lien")
+          supabase.from("cables_fibre").select("port_source_id, port_dest_id, type_lien"),
+          supabase.from("ports").select("slot_id, statut").in("odf_id", odfList.map(o => o.id))
         ]);
 
         const slotsByOdf = {};
@@ -144,6 +228,11 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
         (cablesRes.data || []).forEach(c => {
           if (c.port_source_id) occupiedSlots.add(c.port_source_id.slice(0, -3));
           if (c.port_dest_id) occupiedSlots.add(c.port_dest_id.slice(0, -3));
+        });
+
+        const slotsWithFreePort = new Set();
+        (portsRes.data || []).forEach(p => {
+          if (p.statut === "LIBRE") slotsWithFreePort.add(p.slot_id);
         });
 
         // Déterminer en temps réel quels ODFs ont déjà des câbles et de quels types ils sont
@@ -172,7 +261,7 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
 
             const odfSlots = slotsByOdf[o.id] || [];
             if (odfSlots.length === 0) return false;
-            return odfSlots.every(slotId => !occupiedSlots.has(slotId));
+            return odfSlots.every(slotId => !occupiedSlots.has(slotId) && slotsWithFreePort.has(slotId));
           });
         } else {
           // Pour Slot individuel, au moins 1 slot doit être libre
@@ -183,7 +272,7 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
 
             const odfSlots = slotsByOdf[o.id] || [];
             if (odfSlots.length === 0) return false;
-            return odfSlots.some(slotId => !occupiedSlots.has(slotId));
+            return odfSlots.some(slotId => !occupiedSlots.has(slotId) && slotsWithFreePort.has(slotId));
           });
         }
 
@@ -194,14 +283,17 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
 
   // CASCADE ODF → slots (seulement en mode slot)
   useEffect(() => {
-    setSlot(""); setSlots([]);
+    setSelectedSlots([]); setSlots([]);
     if (odf && connType === "slot") {
       getSlots(odf).then(async (r) => {
         const slotList = r.data || [];
         if (slotList.length === 0) return;
 
-        // Récupérer les câbles existants
-        const cablesRes = await supabase.from("cables_fibre").select("port_source_id, port_dest_id");
+        // Récupérer les câbles existants et le statut des ports
+        const [cablesRes, portsRes] = await Promise.all([
+          supabase.from("cables_fibre").select("port_source_id, port_dest_id"),
+          supabase.from("ports").select("slot_id, statut").eq("odf_id", odf)
+        ]);
 
         const occupiedSlots = new Set();
         (cablesRes.data || []).forEach(c => {
@@ -209,7 +301,12 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
           if (c.port_dest_id) occupiedSlots.add(c.port_dest_id.slice(0, -3));
         });
 
-        const availableSlots = slotList.filter(s => !occupiedSlots.has(s.id));
+        const slotsWithFreePort = new Set();
+        (portsRes.data || []).forEach(p => {
+          if (p.statut === "LIBRE") slotsWithFreePort.add(p.slot_id);
+        });
+
+        const availableSlots = slotList.filter(s => !occupiedSlots.has(s.id) && slotsWithFreePort.has(s.id));
         setSlots(availableSlots);
       });
     }
@@ -217,8 +314,8 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
 
   // Notifier le parent
   useEffect(() => {
-    onChange({ site, salle, rack, odf, slot });
-  }, [site, salle, rack, odf, slot]);
+    onChange({ site, salle, rack, odf, selectedSlots });
+  }, [site, salle, rack, odf, selectedSlots]);
 
   const filteredSitesList = sites.filter(s => s.id !== excludeSiteId);
   const filteredSallesList = salles.filter(s => s.id !== excludeSalleId);
@@ -261,16 +358,21 @@ function InfraSelector({ label, color, onChange, TH, excludeSiteId = "", exclude
         </div>
         {connType === "slot" && (
           <div style={{ gridColumn: "1/-1" }}>
-            <Label TH={TH}>Slot (1 slot = 12 ports connectés automatiquement)</Label>
-            <Sel value={slot} onChange={setSlot} TH={TH} disabled={!odf}>
-              <option value="">— Sélectionner un slot —</option>
-              {slots.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Sel>
+            <Label TH={TH}>Slots (Cochez le ou les slots souhaités)</Label>
+            <MultiSlotSelect 
+              slots={slots} 
+              selected={selectedSlots} 
+              onChange={setSelectedSlots} 
+              TH={TH} 
+              disabled={!odf}
+            />
           </div>
         )}
       </div>
       {connType === "slot" ? (
-        <SlotPortPreview slotId={slot} label={`Ports du slot ${slot?.split("_").pop() || ""}`} color={color} TH={TH} />
+        selectedSlots.map(sId => (
+          <SlotPortPreview key={sId} slotId={sId} label={`Ports du slot ${sId?.split("_").pop() || ""}`} color={color} TH={TH} />
+        ))
       ) : (
         <OdfSlotsPreview odfId={odf} color={color} TH={TH} />
       )}
@@ -284,8 +386,8 @@ export default function OdfConnectView({ t, TH }) {
   const [mode, setMode] = useState("externe"); // "externe" | "intersalle"
   const [connType, setConnType] = useState("odf"); // "odf" | "slot"
 
-  const [src, setSrc] = useState({ site: "", salle: "", rack: "", odf: "", slot: "" });
-  const [dst, setDst] = useState({ site: "", salle: "", rack: "", odf: "", slot: "" });
+  const [src, setSrc] = useState({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] });
+  const [dst, setDst] = useState({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] });
 
   const [cableRef, setCableRef] = useState("");
   const [typeFibre, setTypeFibre] = useState("Monomode");
@@ -303,8 +405,8 @@ export default function OdfConnectView({ t, TH }) {
 
   // Réinitialiser les sélections en cas de changement de mode ou type connexion
   useEffect(() => {
-    setSrc({ site: "", salle: "", rack: "", odf: "", slot: "" });
-    setDst({ site: "", salle: "", rack: "", odf: "", slot: "" });
+    setSrc({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] });
+    setDst({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] });
     setErr(""); setSuccess("");
   }, [mode, connType]);
 
@@ -363,7 +465,7 @@ export default function OdfConnectView({ t, TH }) {
 
   const canCreate = connType === "odf"
     ? src.odf && dst.odf && src.odf !== dst.odf
-    : src.slot && dst.slot && src.slot !== dst.slot;
+    : src.selectedSlots?.length > 0 && dst.selectedSlots?.length > 0 && src.selectedSlots.length === dst.selectedSlots.length;
 
   const doCreate = async () => {
     if (!canCreate) return;
@@ -425,40 +527,49 @@ export default function OdfConnectView({ t, TH }) {
 
         setSuccess(`✅ Connexion par ODF entier créée ! ${sSlots.length} slots raccordés (${sSlots.length * 12} ports connectés).`);
       } else {
-        // --- Création par Slot unique ---
-        const [srcPorts, dstPorts] = await Promise.all([
-          supabase.from("ports").select("id,slot_port,statut").eq("slot_id", src.slot).order("slot_port"),
-          supabase.from("ports").select("id,slot_port,statut").eq("slot_id", dst.slot).order("slot_port"),
-        ]);
-        const sp = (srcPorts.data || []).filter(p => p.statut === "LIBRE");
-        const dp = (dstPorts.data || []).filter(p => p.statut === "LIBRE");
-        if (sp.length === 0 || dp.length === 0) {
-          throw new Error("Aucun port libre disponible dans l'un des slots sélectionnés.");
-        }
+        // --- Création par un ou plusieurs Slots spécifiques ---
         const typeLien = mode === "externe" ? "EXTERNE" : "INTERNE";
-        const { error } = await createCable({
-          cable_reference: cableRef,
-          nom: `${src.site} ↔ ${mode === "intersalle" ? src.site : dst.site} (${mode === "externe" ? "EXTERNE" : "INTERNE"})`,
-          type_lien: typeLien,
-          type_fibre: typeFibre,
-          nombre_fibres: 12,
-          fournisseur_id: null,
-          capacite_totale_gbps: 0,
-          capacite_disponible_gbps: 0,
-          port_source_id: sp[0].id,
-          port_dest_id: dp[0].id,
-        });
-        if (error) throw error;
 
-        // Note: Les ports restent au statut LIBRE à la création.
-        // Ils passeront OCCUPE lorsqu'un service utilisera ces ports.
+        for (let i = 0; i < src.selectedSlots.length; i++) {
+          const sSlotId = src.selectedSlots[i];
+          const dSlotId = dst.selectedSlots[i];
 
-        setSuccess(`✅ Connexion créée ! Câble ${cableRef} — ports raccordés.`);
+          const sSlotName = sSlotId.split("_").pop() || `Slot${i+1}`;
+
+          const [srcPorts, dstPorts] = await Promise.all([
+            supabase.from("ports").select("id,slot_port,statut").eq("slot_id", sSlotId).order("slot_port"),
+            supabase.from("ports").select("id,slot_port,statut").eq("slot_id", dSlotId).order("slot_port"),
+          ]);
+          const sp = (srcPorts.data || []).filter(p => p.statut === "LIBRE");
+          const dp = (dstPorts.data || []).filter(p => p.statut === "LIBRE");
+
+          if (sp.length === 0 || dp.length === 0) {
+            throw new Error(`Aucun port libre disponible dans le slot source ${sSlotName} ou sa destination correspondante.`);
+          }
+
+          const subRef = src.selectedSlots.length > 1 ? `${cableRef}-${sSlotName}` : cableRef;
+
+          const { error: cabErr } = await createCable({
+            cable_reference: subRef,
+            nom: `${src.site} ↔ ${mode === "intersalle" ? src.site : dst.site} (${mode === "externe" ? "EXTERNE" : "INTERNE"})`,
+            type_lien: typeLien,
+            type_fibre: typeFibre,
+            nombre_fibres: 12,
+            fournisseur_id: null,
+            capacite_totale_gbps: 0,
+            capacite_disponible_gbps: 0,
+            port_source_id: sp[0].id,
+            port_dest_id: dp[0].id,
+          });
+          if (cabErr) throw cabErr;
+        }
+
+        setSuccess(`✅ Connexion par Slot(s) créée ! ${src.selectedSlots.length} slot(s) raccordé(s) (${src.selectedSlots.length * 12} ports connectés).`);
       }
 
       setCableRef(""); 
-      setSrc({ site: "", salle: "", rack: "", odf: "", slot: "" }); 
-      setDst({ site: "", salle: "", rack: "", odf: "", slot: "" });
+      setSrc({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] }); 
+      setDst({ site: "", salle: "", rack: "", odf: "", selectedSlots: [] });
     } catch (e) {
       setErr("Erreur : " + (e.message || JSON.stringify(e)));
     }
