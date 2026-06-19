@@ -6,7 +6,6 @@ export default function ServicesManager({ services, onAddService, onDeleteServic
   const [modal, setModal] = useState(false);
   const [cid, setCid] = useState("");
   const [label, setLabel] = useState("");
-  const [cap, setCap] = useState("");
   const [srcClient, setSrcClient] = useState("");
   const [endClient, setEndClient] = useState("");
   const [owner, setOwner] = useState("");
@@ -19,7 +18,7 @@ export default function ServicesManager({ services, onAddService, onDeleteServic
       return;
     }
     onAddService({
-      id: cid.trim(), label, capacite: cap, source_client: srcClient,
+      id: cid.trim(), label, source_client: srcClient,
       end_client: endClient, owner, remarques, created_at: new Date().toISOString()
     });
     setModal(false);
@@ -29,7 +28,7 @@ export default function ServicesManager({ services, onAddService, onDeleteServic
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const base = `DJT-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    setCid(base); setLabel(""); setCap(""); setSrcClient(""); setEndClient(""); setOwner(""); setRemarques(""); setErr("");
+    setCid(base); setLabel(""); setSrcClient(""); setEndClient(""); setOwner(""); setRemarques(""); setErr("");
     setModal(true);
   };
 
@@ -41,19 +40,17 @@ export default function ServicesManager({ services, onAddService, onDeleteServic
       </div>
 
       <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,.06)" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "150px 150px 100px 1fr 1fr 60px", background: NAVY, color: "#fff", padding: "10px 14px", borderTopLeftRadius: 12, borderTopRightRadius: 12, fontSize: 11, fontWeight: 700 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "150px 150px 1fr 1fr 60px", background: NAVY, color: "#fff", padding: "10px 14px", borderTopLeftRadius: 12, borderTopRightRadius: 12, fontSize: 11, fontWeight: 700 }}>
           <div>CID</div>
           <div>LABEL</div>
-          <div>CAPACITÉ</div>
           <div>CLIENT SOURCE</div>
           <div>CLIENT FINAL</div>
           <div>ACTIONS</div>
         </div>
         {services.map((s, i) => (
-          <div key={s.id} style={{ display: "grid", gridTemplateColumns: "150px 150px 100px 1fr 1fr 60px", padding: "10px 14px", borderBottom: "1px solid #F0F4F8", alignItems: "center", fontSize: 12 }}>
+          <div key={s.id} style={{ display: "grid", gridTemplateColumns: "150px 150px 1fr 1fr 60px", padding: "10px 14px", borderBottom: "1px solid #F0F4F8", alignItems: "center", fontSize: 12 }}>
             <div style={{ fontFamily: "monospace", fontWeight: 700 }}>{s.id}</div>
             <div>{s.label}</div>
-            <div>{s.capacite || "—"}</div>
             <div>{s.source_client || "—"}</div>
             <div>{s.end_client || "—"}</div>
             <div>
@@ -70,7 +67,6 @@ export default function ServicesManager({ services, onAddService, onDeleteServic
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <Inp label="CID (Auto-généré)" value={cid} onChange={setCid} mono required />
             <Inp label="Label *" value={label} onChange={setLabel} placeholder="Nom du service" required />
-            <Inp label="Capacité" value={cap} onChange={setCap} placeholder="Ex: 100G" />
             <Inp label="Client Source" value={srcClient} onChange={setSrcClient} />
             <Inp label="Client Final" value={endClient} onChange={setEndClient} />
             <Inp label="Owner" value={owner} onChange={setOwner} />

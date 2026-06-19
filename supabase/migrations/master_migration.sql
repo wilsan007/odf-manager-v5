@@ -2,12 +2,12 @@
 --  ODF Manager V7 — Schéma complet avec IDs lisibles + Génération automatique
 --  Hiérarchie : Sites → Salles → Racks → ODFs → Slots → Ports
 --  Convention IDs :
---    site  : 'RDK'
---    salle : 'RDK-S1'
---    rack  : 'RDK-R1'
---    odf   : 'RDK-R1-ODF1'
---    slot  : 'RDK-R1-ODF1_S01'
---    port  : 'RDK-R1-ODF1_S01P01'
+--    site  : 'ALP'
+--    salle : 'ALP-S1'
+--    rack  : 'ALP-R1'
+--    odf   : 'ALP-R1-ODF1'
+--    slot  : 'ALP-R1-ODF1_S01'
+--    port  : 'ALP-R1-ODF1_S01P01'
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ CREATE TABLE public.clients (
 );
 
 -- SITES
--- id  : code court, ex. 'RDK', 'YAC'
+-- id  : code court, ex. 'ALP', 'BET'
 CREATE TABLE public.sites (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -121,7 +121,7 @@ CREATE TABLE public.sites (
 );
 
 -- SALLES
--- id  : '{site_id}-{name}', ex. 'RDK-S1'
+-- id  : '{site_id}-{name}', ex. 'ALP-S1'
 CREATE TABLE public.salles (
   id          TEXT PRIMARY KEY,
   site_id     TEXT NOT NULL REFERENCES public.sites(id) ON DELETE CASCADE,
@@ -135,7 +135,7 @@ CREATE TABLE public.salles (
 );
 
 -- RACKS
--- id  : '{site_id}-{name}', ex. 'RDK-R1'
+-- id  : '{site_id}-{name}', ex. 'ALP-R1'
 CREATE TABLE public.racks (
   id          TEXT PRIMARY KEY,
   site_id     TEXT NOT NULL REFERENCES public.sites(id)  ON DELETE CASCADE,
@@ -150,7 +150,7 @@ CREATE TABLE public.racks (
 );
 
 -- ODFs
--- id  : '{rack_id}-{name}', ex. 'RDK-R1-ODF1'
+-- id  : '{rack_id}-{name}', ex. 'ALP-R1-ODF1'
 CREATE TABLE public.odfs (
   id             TEXT PRIMARY KEY,
   rack_id        TEXT NOT NULL REFERENCES public.racks(id) ON DELETE CASCADE,
@@ -172,7 +172,7 @@ CREATE TABLE public.odfs (
 );
 
 -- SLOTS  (= ancienne "cassette" V6, = groupement physique de 12 ports)
--- id  : '{odf_id}_S{NN}', ex. 'RDK-R1-ODF1_S01'
+-- id  : '{odf_id}_S{NN}', ex. 'ALP-R1-ODF1_S01'
 -- name: 'S01', 'S02', …
 CREATE TABLE public.slots (
   id         TEXT PRIMARY KEY,
@@ -187,7 +187,7 @@ CREATE TABLE public.slots (
 );
 
 -- PORTS
--- id        : '{odf_id}_{slot_port}', ex. 'RDK-R1-ODF1_S01P01'
+-- id        : '{odf_id}_{slot_port}', ex. 'ALP-R1-ODF1_S01P01'
 -- slot_port : 'S01P01' (slot + port)
 -- slot      : numéro de slot (int)
 -- port      : numéro de port dans le slot (int)
@@ -214,7 +214,7 @@ CREATE TABLE public.ports (
 );
 
 -- CÂBLES FIBRE  (câble physique porteur de capacité)
--- cable_reference         : ex. 'CBL-RDK-SEACOM-01'
+-- cable_reference         : ex. 'CBL-ALP-SEACOM-01'
 -- capacite_totale_gbps    : capacité totale du câble (Gbps)
 -- capacite_disponible_gbps: capacité restante, décrémentée par les services
 CREATE TABLE public.cables_fibre (
@@ -614,7 +614,7 @@ JOIN public.sites  dst_si ON dst_sa.site_id   = dst_si.id;
 -- 7b. ROUTAGE DES SERVICES (route dynamique, retracée à la lecture)
 -- ───────────────────────────────────────────────────────────────────────────
 
--- Étiquette lisible d'un port : ex. 'RDK/ODF1/S01P05'
+-- Étiquette lisible d'un port : ex. 'ALP/ODF1/S01P05'
 CREATE OR REPLACE FUNCTION fn_port_label(p_port TEXT)
 RETURNS TEXT LANGUAGE sql STABLE AS $$
   SELECT si.name || '/' || sa.name || '/' || o.name || '/' || p.slot_port
@@ -696,7 +696,7 @@ CREATE POLICY "allow_all" ON public.history      FOR ALL USING (true) WITH CHECK
 -- 9. DONNÉES DÉMO
 -- ATTENTION : on insère uniquement les sites ; les triggers créent
 --             automatiquement R1, ODF1, S01 et les 12 ports pour chacun.
---             Ensuite on insère les ODFs supplémentaires de Ras-Dika
+--             Ensuite on insère les ODFs supplémentaires de Site Alpha
 --             et on peuple les ports réels via UPDATE.
 -- ───────────────────────────────────────────────────────────────────────────
 
@@ -717,28 +717,30 @@ INSERT INTO public.clients (id, nom, type) VALUES
   ('WINGU',  'Wingu',     'Data Center')
 ON CONFLICT (id) DO NOTHING;
 
--- Sites (les triggers créent RDK-R1, RDK-R1-ODF1, RDK-R1-ODF1_S01, P01..P12)
+-- Sites (les triggers créent ALP-R1, ALP-R1-ODF1, ALP-R1-ODF1_S01, P01..P12)
 INSERT INTO public.sites (id, name, description) VALUES
-  ('RDK', 'Ras-Dika',  'Cable Landing Station (côté Mosquée)'),
-  ('YAC', 'YAC',       'Site YAC — bâtiment côté ville'),
-  ('HAR', 'Haramous',  'Station Haramous (via Siesta)'),
-  ('DDC', 'DDC',       'Data Center Djibouti')
-ON CONFLICT (id) DO NOTHING;
+  ('ALP', 'Site Alpha',   'Site principal (Alpha)'),
+  ('BET', 'Site Beta',    'Site secondaire (Beta)'),
+  ('GAM', 'Site Gamma',   'Site relais (Gamma)'),
+  ('DEL', 'Site Delta',   'Data Center (Delta)'),
+  ('EPS', 'Site Epsilon', 'Nouveau site Epsilon'),
+  ('ZET', 'Site Zeta',    'Nouveau site Zeta')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
 
--- ODFs supplémentaires pour Ras-Dika (ODF2..ODF8 sur rack RDK-R1)
--- ODF1 a déjà été créé par le trigger du rack RDK-R1, on ajoute les autres
+-- ODFs supplémentaires pour Site Alpha (ODF2..ODF8 sur rack ALP-R1)
+-- ODF1 a déjà été créé par le trigger du rack ALP-R1, on ajoute les autres
 INSERT INTO public.odfs (id, rack_id, name, odf_type, route) VALUES
-  ('RDK-R1-ODF1', 'RDK-R1', 'ODF1', 'EXTERNE', 'Ras-Dika ↔ YAC (côté Mosquée)'),
-  ('RDK-R1-ODF2', 'RDK-R1', 'ODF2', 'EXTERNE', 'Ras-Dika → YAC — IODF CIENA'),
-  ('RDK-R1-ODF3', 'RDK-R1', 'ODF3', 'INTERNE', 'Ras-Dika MMR ↔ ODF L2'),
-  ('RDK-R1-ODF4', 'RDK-R1', 'ODF4', 'EXTERNE', 'Ras-Dika → YAC (BACK, Mosquée)'),
-  ('RDK-R1-ODF5', 'RDK-R1', 'ODF5', 'EXTERNE', 'Ras-Dika ↔ Haramous (Siesta)'),
-  ('RDK-R1-ODF6', 'RDK-R1', 'ODF6', 'EXTERNE', 'Ras-Dika → YAC-B (BACK cable)'),
-  ('RDK-R1-ODF7', 'RDK-R1', 'ODF7', 'EXTERNE', 'Ras-Dika → YAC — Backhaul TEJAS'),
-  ('RDK-R1-ODF8', 'RDK-R1', 'ODF8', 'EXTERNE', 'Ras-Dika ↔ Haramous — CIENA 2')
+  ('ALP-R1-ODF1', 'ALP-R1', 'ODF1', 'EXTERNE', 'Site Alpha ↔ BET (côté Mosquée)'),
+  ('ALP-R1-ODF2', 'ALP-R1', 'ODF2', 'EXTERNE', 'Site Alpha → BET — IODF CIENA'),
+  ('ALP-R1-ODF3', 'ALP-R1', 'ODF3', 'INTERNE', 'Site Alpha MMR ↔ ODF L2'),
+  ('ALP-R1-ODF4', 'ALP-R1', 'ODF4', 'EXTERNE', 'Site Alpha → BET (BACK, Mosquée)'),
+  ('ALP-R1-ODF5', 'ALP-R1', 'ODF5', 'EXTERNE', 'Site Alpha ↔ Site Gamma (Siesta)'),
+  ('ALP-R1-ODF6', 'ALP-R1', 'ODF6', 'EXTERNE', 'Site Alpha → BET-B (BACK cable)'),
+  ('ALP-R1-ODF7', 'ALP-R1', 'ODF7', 'EXTERNE', 'Site Alpha → BET — Backhaul TEJAS'),
+  ('ALP-R1-ODF8', 'ALP-R1', 'ODF8', 'EXTERNE', 'Site Alpha ↔ Site Gamma — CIENA 2')
 ON CONFLICT (id) DO UPDATE SET route = EXCLUDED.route, odf_type = EXCLUDED.odf_type;
 
--- Slots supplémentaires pour les ODFs Ras-Dika (S02..S06 pour chaque ODF)
+-- Slots supplémentaires pour les ODFs Site Alpha (S02..S06 pour chaque ODF)
 -- S01 a été créé automatiquement par le trigger fn_after_odf_insert
 INSERT INTO public.slots (id, odf_id, slot_num, name)
 SELECT
@@ -748,7 +750,7 @@ SELECT
   'S' || LPAD(n::TEXT, 2, '0')
 FROM public.odfs o
 CROSS JOIN generate_series(2, 6) AS n
-WHERE o.rack_id = 'RDK-R1'
+WHERE o.rack_id = 'ALP-R1'
 ON CONFLICT (id) DO NOTHING;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -758,14 +760,14 @@ ON CONFLICT (id) DO NOTHING;
 -- ───────────────────────────────────────────────────────────────────────────
 
 -- ODF1
-UPDATE public.ports SET cid='DJT-22072025091210', ot_num='615', capacite='100G', owner='2AF/MTN',     destination='SEACOM' WHERE id='RDK-R1-ODF1_S01P05';
-UPDATE public.ports SET cid='DJT-18092025114423', ot_num='621', capacite='100G', owner='VF/WIOCC',   destination='AAE1'  WHERE id='RDK-R1-ODF1_S01P06';
+UPDATE public.ports SET cid='DJT-22072025091210', ot_num='615', capacite='100G', owner='2AF/MTN',     destination='SEACOM' WHERE id='ALP-R1-ODF1_S01P05';
+UPDATE public.ports SET cid='DJT-18092025114423', ot_num='621', capacite='100G', owner='VF/WIOCC',   destination='AAE1'  WHERE id='ALP-R1-ODF1_S01P06';
 
 -- ODF2
-UPDATE public.ports SET cid='DJT-03122024085532', ot_num='554', capacite='100G', owner='VF/WIOCC',  destination='DDC'    WHERE id='RDK-R1-ODF2_S01P01';
+UPDATE public.ports SET cid='DJT-03122024085532', ot_num='554', capacite='100G', owner='VF/WIOCC',  destination='DEL'    WHERE id='ALP-R1-ODF2_S01P01';
 
--- Active Route ports for SVC-0004 (Liaison MTN multi-sites RDK→HAR)
-UPDATE public.ports SET cid='DJT-06062026043300', ot_num='700', capacite='40G', owner='MTN' WHERE id IN ('RDK-R1-ODF1_S01P07', 'YAC-R1-ODF1_S01P01', 'YAC-R1-ODF1_S01P02', 'HAR-R1-ODF1_S01P01');
+-- Active Route ports for SVC-0004 (Liaison MTN multi-sites ALP→GAM)
+UPDATE public.ports SET cid='DJT-06062026043300', ot_num='700', capacite='40G', owner='MTN' WHERE id IN ('ALP-R1-ODF1_S01P07', 'BET-R1-ODF1_S01P01', 'BET-R1-ODF1_S01P02', 'GAM-R1-ODF1_S01P01');
 
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -776,29 +778,29 @@ UPDATE public.ports SET cid='DJT-06062026043300', ot_num='700', capacite='40G', 
 INSERT INTO public.cables_fibre
   (id, cable_reference, nom, fournisseur_id, type_fibre, nombre_fibres, route,
    capacite_totale_gbps, capacite_disponible_gbps, port_source_id) VALUES
-  ('CBL-SEACOM-01', 'CBL-RDK-SEACOM-01', 'Ras-Dika ↔ SEACOM', 'SEACOM', 'Monomode', 144, 'Ras-Dika → SEACOM', 400, 400, 'RDK-R1-ODF1_S01P05'),
-  ('CBL-AAE1-01',   'CBL-RDK-AAE1-01',   'Ras-Dika ↔ AAE1',   'AAE1',   'Monomode', 96,  'Ras-Dika → AAE1',   300, 300, 'RDK-R1-ODF1_S01P06'),
-  ('CBL-WIOCC-01',  'CBL-RDK-WIOCC-01',  'Ras-Dika ↔ DDC',    'WIOCC',  'Monomode', 48,  'Ras-Dika → DDC',    200, 200, 'RDK-R1-ODF2_S01P01')
+  ('CBL-SEACOM-01', 'CBL-ALP-SEACOM-01', 'Site Alpha ↔ SEACOM', 'SEACOM', 'Monomode', 144, 'Site Alpha → SEACOM', 400, 400, 'ALP-R1-ODF1_S01P05'),
+  ('CBL-AAE1-01',   'CBL-ALP-AAE1-01',   'Site Alpha ↔ AAE1',   'AAE1',   'Monomode', 96,  'Site Alpha → AAE1',   300, 300, 'ALP-R1-ODF1_S01P06'),
+  ('CBL-WIOCC-01',  'CBL-ALP-WIOCC-01',  'Site Alpha ↔ DEL',    'WIOCC',  'Monomode', 48,  'Site Alpha → DEL',    200, 200, 'ALP-R1-ODF2_S01P01')
 ON CONFLICT (id) DO NOTHING;
 
 -- Lier les ODFs et ports concernés aux câbles physiques (FK)
-UPDATE public.odfs  SET cable_id = 'CBL-SEACOM-01' WHERE id = 'RDK-R1-ODF1';
-UPDATE public.odfs  SET cable_id = 'CBL-WIOCC-01'  WHERE id = 'RDK-R1-ODF2';
-UPDATE public.ports SET cable_id = 'CBL-SEACOM-01' WHERE id = 'RDK-R1-ODF1_S01P05';
-UPDATE public.ports SET cable_id = 'CBL-AAE1-01'   WHERE id = 'RDK-R1-ODF1_S01P06';
-UPDATE public.ports SET cable_id = 'CBL-WIOCC-01'  WHERE id = 'RDK-R1-ODF2_S01P01';
+UPDATE public.odfs  SET cable_id = 'CBL-SEACOM-01' WHERE id = 'ALP-R1-ODF1';
+UPDATE public.odfs  SET cable_id = 'CBL-WIOCC-01'  WHERE id = 'ALP-R1-ODF2';
+UPDATE public.ports SET cable_id = 'CBL-SEACOM-01' WHERE id = 'ALP-R1-ODF1_S01P05';
+UPDATE public.ports SET cable_id = 'CBL-AAE1-01'   WHERE id = 'ALP-R1-ODF1_S01P06';
+UPDATE public.ports SET cable_id = 'CBL-WIOCC-01'  WHERE id = 'ALP-R1-ODF2_S01P01';
 
--- Liens de routage pour la démo multi-sites (RDK → YAC → HAR)
---   2 liens EXTERNE (porteurs de capacité) + 1 JARRETIERE interne à YAC (capacité 0)
+-- Liens de routage pour la démo multi-sites (ALP → BET → GAM)
+--   2 liens EXTERNE (porteurs de capacité) + 1 JARRETIERE interne à BET (capacité 0)
 INSERT INTO public.cables_fibre
   (id, cable_reference, nom, type_lien, fournisseur_id, type_fibre, route,
    capacite_totale_gbps, capacite_disponible_gbps, port_source_id, port_dest_id) VALUES
-  ('CBL-RDK-YAC', 'CBL-RDK-YAC-01', 'Ras-Dika ↔ YAC', 'EXTERNE', 'WIOCC', 'Monomode', 'Ras-Dika → YAC',
-     200, 200, 'RDK-R1-ODF1_S01P07', 'YAC-R1-ODF1_S01P01'),
-  ('JAR-YAC-01',  'JAR-YAC-01',     'Brassage YAC ODF1', 'JARRETIERE', NULL, 'Monomode', 'Brassage interne YAC',
-     0, 0, 'YAC-R1-ODF1_S01P01', 'YAC-R1-ODF1_S01P02'),
-  ('CBL-YAC-HAR', 'CBL-YAC-HAR-01', 'YAC ↔ Haramous', 'EXTERNE', 'AAE1', 'Monomode', 'YAC → Haramous',
-     200, 200, 'YAC-R1-ODF1_S01P02', 'HAR-R1-ODF1_S01P01')
+  ('CBL-ALP-BET', 'CBL-ALP-BET-01', 'Site Alpha ↔ BET', 'EXTERNE', 'WIOCC', 'Monomode', 'Site Alpha → BET',
+     200, 200, 'ALP-R1-ODF1_S01P07', 'BET-R1-ODF1_S01P01'),
+  ('JAR-BET-01',  'JAR-BET-01',     'Brassage BET ODF1', 'JARRETIERE', NULL, 'Monomode', 'Brassage interne BET',
+     0, 0, 'BET-R1-ODF1_S01P01', 'BET-R1-ODF1_S01P02'),
+  ('CBL-BET-GAM', 'CBL-BET-GAM-01', 'BET ↔ Site Gamma', 'EXTERNE', 'AAE1', 'Monomode', 'BET → Site Gamma',
+     200, 200, 'BET-R1-ODF1_S01P02', 'GAM-R1-ODF1_S01P01')
 ON CONFLICT (id) DO NOTHING;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -809,26 +811,26 @@ ON CONFLICT (id) DO NOTHING;
 -- ───────────────────────────────────────────────────────────────────────────
 INSERT INTO public.services
   (id, label, cable_id, client_id, fournisseur_id, port_id, capacite_gbps, cid, ot_num, statut) VALUES
-  ('SVC-0001', 'Transit IP SEACOM 100G', 'CBL-SEACOM-01', 'MTN',    'SEACOM', 'RDK-R1-ODF1_S01P05', 100, 'DJT-22072025091210', '615', 'ACTIF'),
-  ('SVC-0002', 'Capacité AAE1 100G',     'CBL-AAE1-01',   'VF',     'AAE1',   'RDK-R1-ODF1_S01P06', 100, 'DJT-18092025114423', '621', 'ACTIF'),
-  ('SVC-0003', 'Liaison DDC 10G',        'CBL-WIOCC-01',  'AIRTEL', 'WIOCC',  'RDK-R1-ODF2_S01P01', 10,  'DJT-03122024085532', '554', 'ACTIF')
+  ('SVC-0001', 'Transit IP SEACOM 100G', 'CBL-SEACOM-01', 'MTN',    'SEACOM', 'ALP-R1-ODF1_S01P05', 100, 'DJT-22072025091210', '615', 'ACTIF'),
+  ('SVC-0002', 'Capacité AAE1 100G',     'CBL-AAE1-01',   'VF',     'AAE1',   'ALP-R1-ODF1_S01P06', 100, 'DJT-18092025114423', '621', 'ACTIF'),
+  ('SVC-0003', 'Liaison DEL 10G',        'CBL-WIOCC-01',  'AIRTEL', 'WIOCC',  'ALP-R1-ODF2_S01P01', 10,  'DJT-03122024085532', '554', 'ACTIF')
 ON CONFLICT (id) DO NOTHING;
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 10d. SERVICE MULTI-SITES + JONCTIONS (démo du routage dynamique)
---   Service traversant RDK → YAC → HAR. La capacité (40G) est débitée sur le
---   câble primaire (cable_id = CBL-RDK-YAC). Les jonctions décrivent le chemin
+--   Service traversant ALP → BET → GAM. La capacité (40G) est débitée sur le
+--   câble primaire (cable_id = CBL-ALP-BET). Les jonctions décrivent le chemin
 --   complet jusqu'au client final ; fn_service_route() le reconstruit à la lecture.
 -- ───────────────────────────────────────────────────────────────────────────
 INSERT INTO public.services
   (id, label, cable_id, client_id, fournisseur_id, port_id, capacite_gbps, cid, ot_num, statut) VALUES
-  ('SVC-0004', 'Liaison MTN multi-sites RDK→HAR', 'CBL-RDK-YAC', 'MTN', 'WIOCC', 'RDK-R1-ODF1_S01P07', 40, 'DJT-06062026043300', '700', 'ACTIF')
+  ('SVC-0004', 'Liaison MTN multi-sites ALP→GAM', 'CBL-ALP-BET', 'MTN', 'WIOCC', 'ALP-R1-ODF1_S01P07', 40, 'DJT-06062026043300', '700', 'ACTIF')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.service_jonctions (service_id, ordre, cable_id, port_entree_id, port_sortie_id) VALUES
-  ('SVC-0004', 1, 'CBL-RDK-YAC', 'RDK-R1-ODF1_S01P07', 'YAC-R1-ODF1_S01P01'),
-  ('SVC-0004', 2, 'JAR-YAC-01',  'YAC-R1-ODF1_S01P01', 'YAC-R1-ODF1_S01P02'),
-  ('SVC-0004', 3, 'CBL-YAC-HAR', 'YAC-R1-ODF1_S01P02', 'HAR-R1-ODF1_S01P01')
+  ('SVC-0004', 1, 'CBL-ALP-BET', 'ALP-R1-ODF1_S01P07', 'BET-R1-ODF1_S01P01'),
+  ('SVC-0004', 2, 'JAR-BET-01',  'BET-R1-ODF1_S01P01', 'BET-R1-ODF1_S01P02'),
+  ('SVC-0004', 3, 'CBL-BET-GAM', 'BET-R1-ODF1_S01P02', 'GAM-R1-ODF1_S01P01')
 ON CONFLICT (service_id, ordre) DO NOTHING;
 
 -- ───────────────────────────────────────────────────────────────────────────
@@ -855,3 +857,223 @@ FROM public.cables_fibre ORDER BY id;
 -- Vérification du routage dynamique des services (route reconstruite)
 SELECT service_id, cid, label, client, route, nb_jonctions
 FROM public.vue_routes_service ORDER BY service_id;
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ODF Manager V8 — Anneau inter-sites 4×12 ports (CORRIGÉ)
+-- Topologie : ALP ↔ BET ↔ GAM ↔ DEL ↔ ALP
+--
+-- Chaque liaison = 12 câbles EXTERNE indépendants (1 fibre chacun).
+-- Slots S02 créés pour BET, GAM, DEL (S01 = déjà pris par la liaison
+-- entrante, S02 = ports vers le site suivant dans l'anneau).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- 1. Nettoyage des anciens câbles de démo V7 (1 port par liaison)
+DELETE FROM public.service_jonctions
+  WHERE cable_id IN ('CBL-ALP-BET','CBL-BET-GAM','CBL-ALP-BET-01','CBL-BET-GAM-01');
+DELETE FROM public.services
+  WHERE cable_id IN ('CBL-ALP-BET','CBL-BET-GAM','CBL-ALP-BET-01','CBL-BET-GAM-01');
+DELETE FROM public.cables_fibre
+  WHERE id IN ('CBL-ALP-BET','CBL-BET-GAM','CBL-ALP-BET-01','CBL-BET-GAM-01');
+
+-- 2. Slots S02 pour BET, GAM, DEL
+--    (S01 reçoit les fibres entrantes, S02 porte les fibres sortantes)
+INSERT INTO public.slots (id, odf_id, slot_num, name) VALUES
+  ('BET-R1-ODF1_S02', 'BET-R1-ODF1', 2, 'S02'),
+  ('GAM-R1-ODF1_S02', 'GAM-R1-ODF1', 2, 'S02'),
+  ('DEL-R1-ODF1_S02', 'DEL-R1-ODF1', 2, 'S02')
+ON CONFLICT (id) DO NOTHING;
+-- Le trigger fn_after_slot_insert crée automatiquement P01..P12 pour chaque slot.
+
+-- 3. Slot S02 pour ALP (ports de sortie vers DEL, côté anneau retour)
+--    ALP-R1-ODF1_S02 existe déjà dans les données V7 ; on l'insère en
+--    ON CONFLICT DO NOTHING pour être idempotent.
+INSERT INTO public.slots (id, odf_id, slot_num, name)
+  VALUES ('ALP-R1-ODF1_S02', 'ALP-R1-ODF1', 2, 'S02')
+ON CONFLICT (id) DO NOTHING;
+
+-- Attendre que les triggers aient créé les ports avant de les référencer
+-- (les triggers AFTER INSERT sont synchrones dans Postgres — pas de sleep nécessaire)
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 4. Câbles inter-sites — 12 par liaison
+--    Ordre correct des colonnes :
+--      id, cable_reference, nom,
+--      type_lien,            ← 'EXTERNE'
+--      fournisseur_id,       ← code fournisseur
+--      type_fibre,           ← 'Monomode'
+--      nombre_fibres,        ← 1
+--      route,                ← description lisible
+--      capacite_totale_gbps, capacite_disponible_gbps,
+--      port_source_id, port_dest_id
+-- ─────────────────────────────────────────────────────────────────────────
+
+-- Liaison ALP → BET  (ALP S02 → BET S01)
+INSERT INTO public.cables_fibre
+  (id, cable_reference, nom, type_lien, fournisseur_id, type_fibre, nombre_fibres,
+   route, capacite_totale_gbps, capacite_disponible_gbps, port_source_id, port_dest_id)
+SELECT
+  'CBL-ALP-BET-' || LPAD(p::TEXT, 2, '0'),
+  'CBL-ALP-BET-' || LPAD(p::TEXT, 2, '0'),
+  'Liaison ALP-BET Fibre ' || LPAD(p::TEXT, 2, '0'),
+  'EXTERNE',
+  'WIOCC',
+  'Monomode',
+  1,
+  'Site Alpha ↔ BET',
+  400,
+  400,
+  'ALP-R1-ODF1_S02P' || LPAD(p::TEXT, 2, '0'),
+  'BET-R1-ODF1_S01P' || LPAD(p::TEXT, 2, '0')
+FROM generate_series(1, 12) p
+ON CONFLICT (id) DO UPDATE SET
+  type_lien                = 'EXTERNE',
+  fournisseur_id           = 'WIOCC',
+  port_source_id           = EXCLUDED.port_source_id,
+  port_dest_id             = EXCLUDED.port_dest_id,
+  capacite_totale_gbps     = 400,
+  capacite_disponible_gbps = 400;
+
+-- Liaison BET → GAM  (BET S02 → GAM S01)
+INSERT INTO public.cables_fibre
+  (id, cable_reference, nom, type_lien, fournisseur_id, type_fibre, nombre_fibres,
+   route, capacite_totale_gbps, capacite_disponible_gbps, port_source_id, port_dest_id)
+SELECT
+  'CBL-BET-GAM-' || LPAD(p::TEXT, 2, '0'),
+  'CBL-BET-GAM-' || LPAD(p::TEXT, 2, '0'),
+  'Liaison BET-GAM Fibre ' || LPAD(p::TEXT, 2, '0'),
+  'EXTERNE',
+  'AAE1',
+  'Monomode',
+  1,
+  'BET ↔ Site Gamma',
+  400,
+  400,
+  'BET-R1-ODF1_S02P' || LPAD(p::TEXT, 2, '0'),
+  'GAM-R1-ODF1_S01P' || LPAD(p::TEXT, 2, '0')
+FROM generate_series(1, 12) p
+ON CONFLICT (id) DO UPDATE SET
+  type_lien                = 'EXTERNE',
+  fournisseur_id           = 'AAE1',
+  port_source_id           = EXCLUDED.port_source_id,
+  port_dest_id             = EXCLUDED.port_dest_id,
+  capacite_totale_gbps     = 400,
+  capacite_disponible_gbps = 400;
+
+-- Liaison GAM → DEL  (GAM S02 → DEL S01)
+INSERT INTO public.cables_fibre
+  (id, cable_reference, nom, type_lien, fournisseur_id, type_fibre, nombre_fibres,
+   route, capacite_totale_gbps, capacite_disponible_gbps, port_source_id, port_dest_id)
+SELECT
+  'CBL-GAM-DEL-' || LPAD(p::TEXT, 2, '0'),
+  'CBL-GAM-DEL-' || LPAD(p::TEXT, 2, '0'),
+  'Liaison GAM-DEL Fibre ' || LPAD(p::TEXT, 2, '0'),
+  'EXTERNE',
+  'EIG',
+  'Monomode',
+  1,
+  'Site Gamma ↔ DEL',
+  400,
+  400,
+  'GAM-R1-ODF1_S02P' || LPAD(p::TEXT, 2, '0'),
+  'DEL-R1-ODF1_S01P' || LPAD(p::TEXT, 2, '0')
+FROM generate_series(1, 12) p
+ON CONFLICT (id) DO UPDATE SET
+  type_lien                = 'EXTERNE',
+  fournisseur_id           = 'EIG',
+  port_source_id           = EXCLUDED.port_source_id,
+  port_dest_id             = EXCLUDED.port_dest_id,
+  capacite_totale_gbps     = 400,
+  capacite_disponible_gbps = 400;
+
+-- Liaison DEL → ALP  (DEL S02 → ALP ODF4 S01)
+INSERT INTO public.cables_fibre
+  (id, cable_reference, nom, type_lien, fournisseur_id, type_fibre, nombre_fibres,
+   route, capacite_totale_gbps, capacite_disponible_gbps, port_source_id, port_dest_id)
+SELECT
+  'CBL-DEL-ALP-' || LPAD(p::TEXT, 2, '0'),
+  'CBL-DEL-ALP-' || LPAD(p::TEXT, 2, '0'),
+  'Liaison DEL-ALP Fibre ' || LPAD(p::TEXT, 2, '0'),
+  'EXTERNE',
+  'SEACOM',
+  'Monomode',
+  1,
+  'DEL ↔ Site Alpha',
+  400,
+  400,
+  'DEL-R1-ODF1_S02P' || LPAD(p::TEXT, 2, '0'),
+  'ALP-R1-ODF4_S01P' || LPAD(p::TEXT, 2, '0')
+FROM generate_series(1, 12) p
+ON CONFLICT (id) DO UPDATE SET
+  type_lien                = 'EXTERNE',
+  fournisseur_id           = 'SEACOM',
+  port_source_id           = EXCLUDED.port_source_id,
+  port_dest_id             = EXCLUDED.port_dest_id,
+  capacite_totale_gbps     = 400,
+  capacite_disponible_gbps = 400;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 5. Vérification post-migration
+-- ─────────────────────────────────────────────────────────────────────────
+-- Exécuter après migration :
+--
+-- SELECT
+--   split_part(port_source_id,'-',1) AS site_src,
+--   split_part(port_dest_id,'-',1)   AS site_dst,
+--   COUNT(*)                          AS nb_cables,
+--   type_lien
+-- FROM public.cables_fibre
+-- WHERE id ~ '^CBL-(ALP-BET|BET-GAM|GAM-DEL|DEL-ALP)-\d+$'
+-- GROUP BY 1,2,4 ORDER BY 1;
+--
+-- Résultat attendu :
+--   DEL | ALP | 12 | EXTERNE
+--   GAM | DEL | 12 | EXTERNE
+--   ALP | BET | 12 | EXTERNE
+--   BET | GAM | 12 | EXTERNE
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ODF Manager V8b — Vue helper vue_cables_inter_sites
+--
+-- À exécuter APRÈS la migration V8 corrigée.
+-- Crée (ou recrée) la vue utilisée par getCablesInterSites() dans l'app.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- Vue simplifiée pour le wizard de routage côté application.
+-- Expose directement site_source et site_dest en extrayant le préfixe
+-- du port_id (convention : port.id = '{site}-...' → split_part(...,'-',1)).
+CREATE OR REPLACE VIEW public.vue_cables_inter_sites AS
+SELECT
+  c.id,
+  c.cable_reference,
+  c.nom,
+  c.fournisseur_id,
+  f.nom                                        AS fournisseur_nom,
+  c.capacite_totale_gbps,
+  c.capacite_disponible_gbps,
+  c.port_source_id,
+  c.port_dest_id,
+  split_part(c.port_source_id, '-', 1)         AS site_source,
+  split_part(c.port_dest_id,   '-', 1)         AS site_dest,
+  src.statut                                   AS statut_source,
+  dst.statut                                   AS statut_dest,
+  src.slot_port                                AS slot_port_source,
+  dst.slot_port                                AS slot_port_dest
+FROM public.cables_fibre c
+JOIN public.ports src ON c.port_source_id = src.id
+JOIN public.ports dst ON c.port_dest_id   = dst.id
+LEFT JOIN public.fournisseurs f ON c.fournisseur_id = f.id
+WHERE c.type_lien = 'EXTERNE';
+
+-- RLS
+ALTER VIEW public.vue_cables_inter_sites OWNER TO postgres;
+
+-- ─── Vérification ────────────────────────────────────────────────────────────
+-- SELECT site_source, site_dest, COUNT(*) AS nb_cables,
+--        SUM(capacite_disponible_gbps)    AS capacite_dispo_totale
+-- FROM   vue_cables_inter_sites
+-- GROUP  BY site_source, site_dest
+-- ORDER  BY site_source;
+--
+-- Résultat attendu (anneau ALP-BET-GAM-DEL) :
+--   DEL | ALP | 12 | 4800
+--   GAM | DEL | 12 | 4800
+--   ALP | BET | 12 | 4800
+--   BET | GAM | 12 | 4800

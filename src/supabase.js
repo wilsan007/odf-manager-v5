@@ -24,11 +24,26 @@ export const createSite = (data) =>
 export const deleteSite = (id) =>
   supabase.from('sites').delete().eq('id', id)
 
+// ─── Salles ──────────────────────────────────────────────────────────────────
+// id  : 'RDK-S1', ...
+export const getSalles = (siteId) => {
+  let q = supabase.from('salles').select('*, sites(name)').order('name')
+  if (siteId) q = q.eq('site_id', siteId)
+  return q
+}
+
+export const createSalle = (data) =>
+  supabase.from('salles').insert(data).select().single()
+
+export const deleteSalle = (id) =>
+  supabase.from('salles').delete().eq('id', id)
+
 // ─── Racks ───────────────────────────────────────────────────────────────────
 // id  : 'RDK-R1', ...
-export const getRacks = (siteId) => {
-  let q = supabase.from('racks').select('*, sites(name)').order('name')
+export const getRacks = (siteId, salleId) => {
+  let q = supabase.from('racks').select('*, sites(name), salles(name)').order('name')
   if (siteId) q = q.eq('site_id', siteId)
+  if (salleId) q = q.eq('salle_id', salleId)
   return q
 }
 
@@ -42,7 +57,7 @@ export const deleteRack = (id) =>
 // id  : 'RDK-R1-ODF1', ...
 export const getOdfs = (rackId) => {
   let q = supabase.from('odfs')
-    .select('*, racks(name, sites(name)), cables_fibre(id, cable_reference, nom, nombre_fibres, capacite_totale_gbps, capacite_disponible_gbps)')
+    .select('*, racks(name, sites(name)), cables_fibre(id, cable_reference, nom, nombre_fibres)')
     .order('name')
   if (rackId) q = q.eq('rack_id', rackId)
   return q
@@ -77,7 +92,8 @@ export const getPorts = (slotId) => {
     *,
     slots(name, odf_id,
       odfs(name, rack_id,
-        racks(name, site_id,
+        racks(name, site_id, salle_id,
+          salles(name),
           sites(name))))
   `).order('slot_port')
   if (slotId) q = q.eq('slot_id', slotId)
@@ -96,7 +112,8 @@ export const getPortsFlat = () =>
     id, slot_port, statut, cid, ot_num, owner, capacite, destination, remarques, updated_at, odf_id,
     slots(id, name, odf_id,
       odfs(id, name, rack_id,
-        racks(id, name, site_id,
+        racks(id, name, site_id, salle_id,
+          salles(id, name),
           sites(id, name))))
   `).order('updated_at', { ascending: false })
 
@@ -140,6 +157,48 @@ export const updateCable = (id, data) =>
 export const deleteCable = (id) =>
   supabase.from('cables_fibre').delete().eq('id', id)
 
+// ─── Câbles inter-sites (EXTERNE uniquement, pour le wizard de routage) ──────────
+// Retourne les câbles avec port_source et port_dest résolus (id + slot_port).
+// Ne filtre PAS sur capacite_disponible > 0 ici — le wizard affiche tous les câbles
+// avec leur capacité restante et laisse l'utilisateur choisir en connaissance de cause.
+export const getCablesInterSites = () =>
+  supabase.from('cables_fibre').select(`
+    id, cable_reference, nom, type_lien, fournisseur_id,
+    port_source_id, port_dest_id,
+    fournisseurs(id, nom),
+    port_source:ports!cables_fibre_port_source_id_fkey(id, slot_port, statut, odf_id),
+    port_dest:ports!cables_fibre_port_dest_id_fkey(id, slot_port, statut, odf_id)
+  `)
+  .eq('type_lien', 'EXTERNE')
+  .order('cable_reference')
+
+// Vérifie la topologie : retourne les liaisons inter-sites avec le nombre de câbles dispo
+// Utile pour l'avertissement "site non connecté" au chargement de l'app
+export const checkTopologie = async () => {
+  const { data: cables } = await supabase.from('cables_fibre')
+    .select('id, port_source_id, port_dest_id')
+    .eq('type_lien', 'EXTERNE')
+  if (!cables) return { ok: false, liaisons: [] }
+
+  // Extraire le site depuis un port_id : les chars avant le premier '-' (ex: RDK)
+  const siteOf = (portId) => portId ? portId.split('-')[0] : null
+
+  // Agréger par paire de sites
+  const liaisons = {}
+  for (const c of cables) {
+    const s1 = siteOf(c.port_source_id)
+    const s2 = siteOf(c.port_dest_id)
+    if (!s1 || !s2 || s1 === s2) continue
+    const key = [s1, s2].sort().join('|')
+    if (!liaisons[key]) liaisons[key] = { sites: [s1, s2], total: 0 }
+    liaisons[key].total++
+  }
+
+  const list = Object.values(liaisons)
+  const ok = list.every(l => l.total >= 12)
+  return { ok, liaisons: list }
+}
+
 // ─── Jarretières (cordons de brassage internes à un site) ──────────────────────
 // L'id est auto-généré ('{site}-JARNN') par le trigger trg_jarretiere_id si omis.
 export const getJarretieres = () =>
@@ -165,11 +224,11 @@ export const deleteJarretiere = (id) =>
 export const getServices = () =>
   supabase.from('services').select(`
     *,
-    cables_fibre(id, cable_reference, nom, type_lien, capacite_totale_gbps, capacite_disponible_gbps),
+    cables_fibre(id, cable_reference, nom, type_lien),
     clients(id, nom),
     fournisseurs(id, nom),
     ports(id, slot_port),
-    service_jonctions(id, ordre, cable_id, jarretiere_id, port_entree_id, port_sortie_id, cid)
+    service_jonctions(id, ordre, cable_id, port_entree_id, port_sortie_id)
   `).order('created_at', { ascending: false })
 
 // Le CID est généré automatiquement par le trigger trg_service_cid si non fourni.
@@ -190,7 +249,7 @@ export const getServiceRoutes = () =>
 // ─── Jonctions de service (chemin ordonné du service jusqu'au client final) ────
 export const getServiceJonctions = (serviceId) =>
   supabase.from('service_jonctions')
-    .select('*, cables_fibre(id, cable_reference, nom, type_lien), jarretieres(id, nom)')
+    .select('*, cables_fibre(id, cable_reference, nom, type_lien)')
     .eq('service_id', serviceId).order('ordre')
 
 // Crée les jonctions d'un service en une fois (tableau ordonné de hops)
@@ -231,3 +290,174 @@ export const getStats = async () => {
     statusCounts,
   }
 }
+
+// Retourne tous les ports d'un site (via racks.site_id)
+// Utilisé pour la sélection de ports de transit dans le wizard service
+export const getSitePorts = async (siteId) => {
+  // Récupération des ODF → slots → ports pour un site donné
+  // On filtre via racks.site_id qui est une FK directe vers sites
+  const { data: racks, error: rErr } = await supabase
+    .from('racks')
+    .select('id')
+    .eq('site_id', siteId);
+
+  if (rErr || !racks?.length) return { data: [] };
+
+  const rackIds = racks.map(r => r.id);
+
+  const { data: odfs, error: oErr } = await supabase
+    .from('odfs')
+    .select('id, name, odf_type')
+    .in('rack_id', rackIds);
+
+  if (oErr || !odfs?.length) return { data: [] };
+
+  const odfIds = odfs.map(o => o.id);
+  const odfMap = Object.fromEntries(odfs.map(o => [o.id, o]));
+
+  const { data: slots, error: sErr } = await supabase
+    .from('slots')
+    .select('id, odf_id')
+    .in('odf_id', odfIds);
+
+  if (sErr || !slots?.length) return { data: [] };
+
+  const slotIds = slots.map(s => s.id);
+  const slotMap = Object.fromEntries(slots.map(s => [s.id, s]));
+
+  const { data: ports, error: pErr } = await supabase
+    .from('ports')
+    .select('id, slot_port, statut, slot_id, odf_id')
+    .in('slot_id', slotIds)
+    .order('id');
+
+  if (pErr) return { data: [] };
+
+  // Enrichir chaque port avec le type ODF pour le sélecteur
+  const enriched = (ports || []).map(p => {
+    const slot = slotMap[p.slot_id];
+    const odf = slot ? odfMap[slot.odf_id] : null;
+    return {
+      ...p,
+      slots: slot ? { ...slot, odfs: odf } : null,
+    };
+  });
+
+  return { data: enriched };
+}
+
+// ─── Données de transit pour le wizard de routage ────────────────────────────
+// Retourne pour un site donné :
+//   - internalPorts : ports sur ODF INTERNE (iODF), enrichis avec odf_type/rack_id/salle_id
+//   - externalPorts : ports sur ODF EXTERNE du site
+//   - jarretieres   : câbles JARRETIERE dont les deux ports sont sur ce site
+// ─── Résolution salle_id en lot (pour le wizard : décider JARRETIERE vs INTERNE) ─────────
+// Retourne un Map portId → salle_id en 3 requêtes optimisées (IN) quel que soit le nombre de ports.
+// Si un port n'a pas de salle associée, sa valeur est null.
+export const getSalleIdsForPorts = async (portIds) => {
+  const result = {};
+  if (!portIds?.length) return result;
+
+  const { data: ports } = await supabase
+    .from('ports')
+    .select('id, odf_id')
+    .in('id', portIds);
+  if (!ports?.length) return result;
+
+  const odfIds = [...new Set(ports.map(p => p.odf_id).filter(Boolean))];
+  const { data: odfs } = await supabase
+    .from('odfs')
+    .select('id, rack_id')
+    .in('id', odfIds);
+  if (!odfs?.length) return result;
+
+  const rackIds = [...new Set(odfs.map(o => o.rack_id).filter(Boolean))];
+  const { data: racks } = await supabase
+    .from('racks')
+    .select('id, salle_id')
+    .in('id', rackIds);
+
+  const odfToRack  = Object.fromEntries((odfs  || []).map(o => [o.id, o.rack_id]));
+  const rackToSalle = Object.fromEntries((racks || []).map(r => [r.id, r.salle_id]));
+
+  (ports || []).forEach(p => {
+    const rackId = odfToRack[p.odf_id];
+    result[p.id] = rackId ? (rackToSalle[rackId] ?? null) : null;
+  });
+  return result;
+};
+
+export const getTransitData = async (siteId) => {
+  const empty = { internalPorts: [], externalPorts: [], jarretieres: [] };
+
+  const { data: racks, error: rErr } = await supabase
+    .from('racks')
+    .select('id, salle_id')
+    .eq('site_id', siteId);
+  if (rErr || !racks?.length) return empty;
+
+  const rackIds = racks.map(r => r.id);
+  const rackSalleMap = Object.fromEntries(racks.map(r => [r.id, r.salle_id]));
+
+  const { data: odfs } = await supabase
+    .from('odfs')
+    .select('id, name, odf_type, rack_id')
+    .in('rack_id', rackIds);
+  if (!odfs?.length) return empty;
+
+  const odfMap = Object.fromEntries(odfs.map(o => [o.id, o]));
+  const internalOdfIds = odfs.filter(o => o.odf_type === 'INTERNE').map(o => o.id);
+  const externalOdfIds = odfs.filter(o => o.odf_type === 'EXTERNE').map(o => o.id);
+
+  const { data: slots } = await supabase
+    .from('slots')
+    .select('id, odf_id, slot_num')
+    .in('odf_id', odfs.map(o => o.id));
+  if (!slots?.length) return empty;
+
+  const slotMap = Object.fromEntries(slots.map(s => [s.id, s]));
+  const internalSlotIds = new Set(slots.filter(s => internalOdfIds.includes(s.odf_id)).map(s => s.id));
+  const externalSlotIds = new Set(slots.filter(s => externalOdfIds.includes(s.odf_id)).map(s => s.id));
+  const allSlotIds = slots.map(s => s.id);
+
+  const [portsRes, jarRes] = await Promise.all([
+    supabase.from('ports')
+      .select('id, slot_port, statut, slot_id, odf_id')
+      .in('slot_id', allSlotIds)
+      .order('id'),
+    supabase.from('cables_fibre')
+      .select('id, port_source_id, port_dest_id')
+      // Inclure INTERNE (intersalle et même salle) — ce sont les connexions locales
+      .in('type_lien', ['INTERNE']),
+
+  ]);
+
+  const allPorts = portsRes.data || [];
+  const allPortIds = new Set(allPorts.map(p => p.id));
+
+  const jarretieres = (jarRes.data || []).filter(
+    j => allPortIds.has(j.port_source_id) && allPortIds.has(j.port_dest_id)
+  );
+
+  const enrichPort = (p) => {
+    const slot = slotMap[p.slot_id];
+    const odf  = slot ? odfMap[slot.odf_id] : null;
+    return {
+      ...p,
+      odf_type: odf?.odf_type || 'EXTERNE',
+      odf_name: odf?.name     || '',
+      rack_id:  odf?.rack_id  || null,
+      salle_id: odf ? rackSalleMap[odf.rack_id] || null : null,
+      slot_num: slot?.slot_num || 0,
+    };
+  };
+
+  const enriched = allPorts.map(enrichPort);
+
+  return {
+    internalPorts: enriched.filter(p => internalSlotIds.has(p.slot_id)),
+    externalPorts: enriched.filter(p => externalSlotIds.has(p.slot_id)),
+    jarretieres,
+  };
+};
+

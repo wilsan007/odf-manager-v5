@@ -153,46 +153,9 @@ end $$;
 -- ═══════════════════════════════════════════════════════════════════════
 -- 6. DEMO DATA — Known active ports (ODF1)
 -- ═══════════════════════════════════════════════════════════════════════
-update public.ports set statut='INTERNE', cid='LAN 1' where id='RDK-R1-ODF1_S01P01';
-update public.ports set statut='INCONNU' where id='RDK-R1-ODF1_S01P02';
-update public.ports set statut='INCONNU' where id='RDK-R1-ODF1_S01P03';
-update public.ports set statut='INTERNE', cid='ISP-IP/DATA' where id='RDK-R1-ODF1_S01P04';
-update public.ports set statut='ACTIF', cid='DJT-22072025091210', ot_num='615', capacite='100G', source_client='2AF / MTN', destination='SEACOM' where id='RDK-R1-ODF1_S01P05';
-update public.ports set statut='ACTIF', cid='DJT-18092025114423', ot_num='621', capacite='100G', source_client='VF / WIOCC / LIQUID', destination='AAE1' where id='RDK-R1-ODF1_S01P06';
-update public.ports set statut='ACTIF', cid='DJT-08092025103023', ot_num='627', capacite='100G', source_client='VF', destination='SEACOM' where id='RDK-R1-ODF1_S01P07';
-update public.ports set statut='INTERNE', cid='IXP-DDC 100G' where id='RDK-R1-ODF1_S01P08';
-update public.ports set statut='ACTIF', cid='DJT-05112025155228', ot_num='632', capacite='100G', source_client='2AF / AIRTEL', destination='SEACOM' where id='RDK-R1-ODF1_S02P11';
-update public.ports set statut='ACTIF', cid='DJT-16102025092520', ot_num='623', capacite='100G', source_client='2AF / VF', destination='SEACOM' where id='RDK-R1-ODF1_S04P01';
+-- Active ports for Demo Service
+update public.ports set statut='ACTIF', cid='DJT-20260531000001', capacite='100G', source_client='2AF / MTN', destination='SEACOM' where id='RDK-R1-ODF1_S01P05';
 
--- ODF2 active ports
-update public.ports set statut='ACTIF', cid='DJT-03122024085532', ot_num='554', capacite='100G', source_client='VF / WIOCC', destination='DDC' where id='RDK-R1-ODF2_S01P01';
-update public.ports set statut='ACTIF', cid='DJT-05112025155741', ot_num='633', capacite='100G', source_client='2AF / AIRTEL', destination='SEACOM' where id='RDK-R1-ODF2_S01P02';
-update public.ports set statut='ACTIF', cid='DJT-06032025104529', ot_num='529', capacite='100G', source_client='VF / WINGU', destination='WINGU' where id='RDK-R1-ODF2_S01P03';
-update public.ports set statut='ACTIF', cid='DJT-27022025100033', ot_num='530', capacite='100G', source_client='VF / WINGU', destination='WINGU' where id='RDK-R1-ODF2_S01P04';
-update public.ports set statut='ACTIF', cid='DJT-03122024092607', ot_num='531', capacite='100G', source_client='VF / WIOCC', destination='DDC' where id='RDK-R1-ODF2_S01P05';
-update public.ports set statut='ACTIF', cid='DJT-09072024172147', ot_num='424', capacite='100G', source_client='VF', destination='WINGU' where id='RDK-R1-ODF2_S01P07';
-update public.ports set statut='ACTIF', cid='DJT-09072024172628', ot_num='425', capacite='100G', source_client='VF', destination='WINGU' where id='RDK-R1-ODF2_S01P08';
-update public.ports set statut='ACTIF', cid='DJT-20082024092642', ot_num='433', capacite='10G', source_client='VF / SILVER', destination='DDC' where id='RDK-R1-ODF2_S02P01';
-update public.ports set statut='ACTIF', cid='DJT-20082024092952', ot_num='434', capacite='10G', source_client='VF / SILVER', destination='DDC' where id='RDK-R1-ODF2_S02P02';
-update public.ports set statut='ACTIF', cid='DJT-15012025153824', ot_num='536', capacite='10G', source_client='AIRTEL', destination='EIG' where id='RDK-R1-ODF2_S02P07';
-update public.ports set statut='ACTIF', cid='DJT-28012025145313', ot_num='541', capacite='10G', source_client='MTN', destination='DDC' where id='RDK-R1-ODF2_S03P01';
-update public.ports set statut='ACTIF', cid='DJT-19052025144325', ot_num='583', capacite='10G', source_client='MTN', destination='DDC' where id='RDK-R1-ODF2_S03P02';
-
--- ODF8 active ports
-update public.ports set statut='ACTIF', cid='DJT-03033035101141', ot_num='OT-000565', capacite='100G', source_client='2AF / VF / WIOCC', destination='DDC' where id='RDK-R1-ODF8_S01P01';
-update public.ports set statut='ACTIF', cid='DJT-22052025122110', ot_num='OT-000563', capacite='100G', source_client='2AF / MTN' where id='RDK-R1-ODF8_S01P02';
-update public.ports set statut='ACTIF', cid='DJT-22072025090632', ot_num='OT-000586', source_client='2AF / MTN' where id='RDK-R1-ODF8_S01P03';
-update public.ports set statut='ACTIF', cid='DJT-12012023143045', ot_num='OT-000552', source_client='2AF / CMCC' where id='RDK-R1-ODF8_S01P04';
-update public.ports set statut='ACTIF', cid='OT-000679', ot_num='OT-000679', source_client='2AF / WIOCC' where id='RDK-R1-ODF8_S01P05';
-update public.ports set statut='ACTIF', cid='OT-000680', ot_num='OT-000680', source_client='2AF / WIOCC' where id='RDK-R1-ODF8_S01P06';
-update public.ports set statut='ACTIF', cid='OT-000681', ot_num='OT-000681', source_client='2AF / WIOCC' where id='RDK-R1-ODF8_S01P07';
-update public.ports set statut='ACTIF', cid='OT-000682', ot_num='OT-000682', source_client='2AF / WIOCC' where id='RDK-R1-ODF8_S01P08';
-update public.ports set statut='ACTIF', cid='DJT-03082025150002', ot_num='OT-000594', source_client='2AF / VF / CTG' where id='RDK-R1-ODF8_S02P01';
-update public.ports set statut='ACTIF', cid='DJT-11112025085042', ot_num='OT-000639', source_client='2AF / CMI' where id='RDK-R1-ODF8_S02P04';
-update public.ports set statut='ACTIF', cid='DJT-22012026090237', ot_num='OT-000683', source_client='2AF / WIOCC' where id='RDK-R1-ODF8_S02P05';
-update public.ports set statut='ACTIF', cid='DJT-10022026013546', ot_num='OT-000715', source_client='2AF / MTN' where id='RDK-R1-ODF8_S02P06';
-update public.ports set statut='ACTIF', cid='DJT-14042026135807', ot_num='OT-000717', source_client='2AF / CMI' where id='RDK-R1-ODF8_S02P07';
-update public.ports set statut='ACTIF', cid='DJT-14042026140240', ot_num='OT-000718', source_client='2AF / CCMC' where id='RDK-R1-ODF8_S02P08';
 
 -- Demo Service
 insert into public.services (id, label, capacite, source_client, end_client) values

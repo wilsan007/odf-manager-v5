@@ -1,14 +1,9 @@
-export const CODE = { A: "ACTIF", I: "INTERNE", N: "INCONNU", R: "RÉSERVÉ", L: "LIBRE" };
-export const REF_CAP = ["", "1G", "2.5G", "10G", "25G", "100G"];
-export const REF_STATUT = ["ACTIF", "INTERNE", "INCONNU", "RÉSERVÉ", "LIBRE"];
-export const REF_OWNERS = ["VF", "VF / WIOCC", "VF / WIOCC / LIQUID", "VF / WINGU", "VF / SILVER", "2AF / MTN", "2AF / VF", "2AF / AIRTEL", "2AF / WIOCC", "2AF / CMCC", "2AF / CMI", "2AF / VF / WIOCC", "2AF / VF / CTG", "MTN", "AIRTEL", "DGS", "DSI", "HORMUUD", "GOLIS", "SOMTEL", "WIOCC", "LIQUID", "SOMCABLE", "LS", "DRM"];
+export const CODE = { L: "LIBRE", O: "OCCUPE", M: "MAUVAIS" };
 
 export const SC = {
-  ACTIF: { bg: "#C6EFCE", tx: "#1A5C28", bd: "#5A9E6A", dot: "#27AE60" },
-  INTERNE: { bg: "#DDEEFF", tx: "#0D47A1", bd: "#6FA8DC", dot: "#2980B9" },
-  INCONNU: { bg: "#FCE4D6", tx: "#7B2000", bd: "#E06C3A", dot: "#E74C3C" },
-  RÉSERVÉ: { bg: "#FFF3CC", tx: "#6B4900", bd: "#E0B84A", dot: "#F39C12" },
   LIBRE: { bg: "#F4F6F8", tx: "#AAB4BE", bd: "#DDE3EA", dot: "#BDC3C7" },
+  OCCUPE: { bg: "#C6EFCE", tx: "#1A5C28", bd: "#5A9E6A", dot: "#27AE60" },
+  MAUVAIS: { bg: "#FCE4D6", tx: "#7B2000", bd: "#E06C3A", dot: "#E74C3C" },
 };
 
 export const NAVY = "#0F2744";
